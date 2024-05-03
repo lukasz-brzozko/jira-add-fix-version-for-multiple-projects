@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Userscript starter
+// @name         Jira Add Fix Version For Multiple Projects
 // @namespace    https://github.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects
 // @version      2024-05-03
-// @description  Creates a new userscript
+// @description  Allows to add one fix version for different projects simultaneously
 // @author       Łukasz Brzózko
 // @match        https://jira.nd0.pl/projects*
 // @exclude      https://jira.nd0.pl/plugins/servlet/*
@@ -14,6 +14,8 @@
 
 (function () {
   "use strict";
+
+  const AJS = window.AJS;
 
   const SELECTORS = {
     defaultAddBtn: ".aui-button.aui-button-primary",
@@ -30,7 +32,9 @@
     optionsBtnContent: "Split More",
     addBtnContent: "Add for more projects",
     containerFound: `Znaleziono formularz ${IDS.form}`,
+    versionCreated: "Created",
     error: {
+      basic: "Error",
       containerNotFound: `Nie znaleziono kontenera ${IDS.form}. Skrypt został wstrzymany.`,
     },
   };
@@ -91,6 +95,42 @@
     return window.location.pathname.split("/").at(-1);
   };
 
+  const displayMessage = ({ type = "info", title, content }) => {
+    AJS.flag({
+      type,
+      body: `<strong>${title}</strong>
+            <ul style="margin-top: 8px; padding-left: 0;">
+              ${content}
+            `,
+    });
+  };
+
+  const getListItemsContent = ({ data, targetProjects, responses }) => {
+    const listElements = data.map((el, index) => {
+      const project = targetProjects[index].name;
+      const status = responses[index].value.status;
+      const message =
+        status === 201
+          ? MESSAGES.versionCreated
+          : el.errorMessages[0] ?? el.errors?.name ?? MESSAGES.error.basic;
+      const lozengeClassName =
+        status === 201 ? "aui-lozenge-success" : "aui-lozenge-removed";
+      const messageColor =
+        status === 201
+          ? "--aui-lozenge-success-subtle-text-color"
+          : "--aui-badge-removed-text-color";
+
+      return `
+      <li>
+        <span>${project}: </span>
+        <span class="aui-lozenge aui-lozenge-subtle ${lozengeClassName}">${status}</span>
+        <span style="font-size: 10px; line-height: 1; color: var(${messageColor})"> - ${message}</span>
+      </li>`;
+    });
+
+    return listElements;
+  };
+
   const createFixVersions = async () => {
     const currentProject = getCurrentProjectName();
     const targetProjects = PROJECTS.filter(
@@ -98,9 +138,21 @@
     );
 
     // defaultAddBtn.click(); //TODO uncomment
-    // const resp = await callCreateVersionEndpoint(targetProjects);
+    const responses = await callCreateVersionEndpoint(targetProjects);
+    const data = await Promise.all(responses.map((resp) => resp.value.json()));
+    console.log({ responses, data });
 
-    // console.log({ resp, targetProjects });
+    const listElements = getListItemsContent({
+      data,
+      targetProjects,
+      responses,
+    });
+
+    displayMessage({
+      type: "info",
+      title: "Projects' response statuses",
+      content: listElements.join(""),
+    });
   };
 
   const renderFixVersionList = () => {

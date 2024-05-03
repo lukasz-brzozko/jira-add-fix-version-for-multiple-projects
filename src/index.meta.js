@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Userscript starter
+// @name         Jira Add Fix Version For Multiple Projects
 // @namespace    https://github.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects
 // @version      2024-05-03
-// @description  Creates a new userscript
+// @description  Allows to add one fix version for different projects simultaneously
 // @author       Łukasz Brzózko
 // @match        https://jira.nd0.pl/projects*
 // @exclude      https://jira.nd0.pl/plugins/servlet/*
