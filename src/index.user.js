@@ -25,7 +25,8 @@
   };
 
   const MESSAGES = {
-    addBtnContent: "Add for multiple projects",
+    optionsBtnContent: "Split More",
+    addBtnContent: "Add for more projects",
     containerFound: `Znaleziono formularz ${IDS.form}`,
     error: {
       containerNotFound: `Nie znaleziono kontenera ${IDS.form}. Skrypt został wstrzymany.`,
@@ -39,14 +40,6 @@
     { name: "ORPP", active: true },
     { name: "CRMO", active: false },
   ];
-
-  const payload = {
-    project: "ORB2BPOO",
-    name: "FrontPortal-1.542",
-    description: "",
-    userStartDate: "",
-    userReleaseDate: "",
-  };
 
   let form;
   let defaultAddBtn;
@@ -99,31 +92,44 @@
     );
 
     // defaultAddBtn.click(); //TODO uncomment
-    const resp = await callCreateVersionEndpoint(targetProjects);
+    // const resp = await callCreateVersionEndpoint(targetProjects);
 
-    console.log({ resp, targetProjects });
+    // console.log({ resp, targetProjects });
   };
 
-  const renderBtn = () => {
+  const renderBtns = () => {
     const buttonContainer = document.createElement("div");
-    const button = document.createElement("div");
+    const addBtn = document.createElement("div");
+    const optionsBtn = document.createElement("div");
 
-    button.className = "aui-button";
-    button.textContent = MESSAGES.addBtnContent;
-    button.setAttribute("role", "button");
-    button.toggleAttribute("resolved", true);
-    button.toggleAttribute("disabled", defaultAddBtn.disabled);
+    buttonContainer.className = "aui-buttons";
 
-    buttonContainer.appendChild(button);
+    addBtn.className = "aui-button aui-button-split-main";
+    addBtn.textContent = MESSAGES.addBtnContent;
+    addBtn.setAttribute("role", "button");
+    addBtn.toggleAttribute("resolved", true);
+    addBtn.toggleAttribute("disabled", defaultAddBtn.disabled);
+
+    optionsBtn.className =
+      "aui-button aui-dropdown2-trigger aui-button-split-more";
+    optionsBtn.textContent = MESSAGES.optionsBtnContent;
+    optionsBtn.setAttribute("role", "button");
+    optionsBtn.setAttribute("aria-controls", "dropdown-button-split");
+    optionsBtn.setAttribute("aria-expanded", "false");
+    optionsBtn.toggleAttribute("resolved", true);
+    optionsBtn.toggleAttribute("aria-haspopup", true);
+
+    buttonContainer.appendChild(addBtn);
+    buttonContainer.appendChild(optionsBtn);
     form.appendChild(buttonContainer);
 
-    listenForDisabledChanges(button);
+    listenForDisabledChanges(addBtn);
 
-    button.addEventListener("click", createFixVersions);
+    addBtn.addEventListener("click", createFixVersions);
   };
 
   const renderUiElements = () => {
-    renderBtn();
+    renderBtns();
   };
 
   const lookForAppContainer = async () => {
