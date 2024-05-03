@@ -22,6 +22,8 @@
 
   const IDS = {
     form: "releases-add__version",
+    listContainer: "fix-version-list",
+    addBtnContainer: "add-btn-continer",
   };
 
   const MESSAGES = {
@@ -37,7 +39,7 @@
   const PROJECTS = [
     { name: "ORB2BPOO", active: true },
     { name: "B2BM", active: true },
-    { name: "ORPP", active: true },
+    { name: "ORPP", active: false },
     { name: "CRMO", active: false },
   ];
 
@@ -85,8 +87,12 @@
     );
   };
 
+  const getCurrentProjectName = () => {
+    return window.location.pathname.split("/").at(-1);
+  };
+
   const createFixVersions = async () => {
-    const currentProject = window.location.pathname.split("/").at(-1);
+    const currentProject = getCurrentProjectName();
     const targetProjects = PROJECTS.filter(
       ({ active, name }) => active && name !== currentProject
     );
@@ -97,11 +103,46 @@
     // console.log({ resp, targetProjects });
   };
 
+  const renderFixVersionList = () => {
+    const currentProject = getCurrentProjectName();
+
+    const container = document.createElement("div");
+    const section = document.createElement("aui-section");
+
+    container.id = IDS.listContainer;
+    container.className = "aui-dropdown2 aui-style-default aui-layer";
+    ("add-btn-continer");
+    container.setAttribute(
+      "data-aui-alignment-container",
+      `#${IDS.addBtnContainer}`
+    );
+    container.toggleAttribute("resolved", true);
+    container.toggleAttribute("aria-hidden", true);
+
+    section.setAttribute("label", "Projects");
+
+    PROJECTS.forEach(({ active, name }) => {
+      const checkbox = document.createElement("aui-item-checkbox");
+      const isCurrentProject = name === currentProject;
+
+      checkbox.textContent = name;
+      checkbox.toggleAttribute("interactive", true);
+      checkbox.toggleAttribute("checked", isCurrentProject || active);
+      checkbox.toggleAttribute("disabled", isCurrentProject);
+
+      section.appendChild(checkbox);
+    });
+
+    container.appendChild(section);
+    form.appendChild(container);
+  };
+
   const renderBtns = () => {
     const buttonContainer = document.createElement("div");
     const addBtn = document.createElement("div");
     const optionsBtn = document.createElement("div");
 
+    buttonContainer.id = IDS.addBtnContainer;
     buttonContainer.className = "aui-buttons";
 
     addBtn.className = "aui-button aui-button-split-main";
@@ -114,7 +155,7 @@
       "aui-button aui-dropdown2-trigger aui-button-split-more";
     optionsBtn.textContent = MESSAGES.optionsBtnContent;
     optionsBtn.setAttribute("role", "button");
-    optionsBtn.setAttribute("aria-controls", "dropdown-button-split");
+    optionsBtn.setAttribute("aria-controls", IDS.listContainer);
     optionsBtn.setAttribute("aria-expanded", "false");
     optionsBtn.toggleAttribute("resolved", true);
     optionsBtn.toggleAttribute("aria-haspopup", true);
@@ -130,6 +171,7 @@
 
   const renderUiElements = () => {
     renderBtns();
+    renderFixVersionList();
   };
 
   const lookForAppContainer = async () => {
