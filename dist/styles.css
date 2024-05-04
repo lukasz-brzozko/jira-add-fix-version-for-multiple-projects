@@ -1,0 +1,23 @@
+#release-page
+  #releases-add__version
+  #add-btn-container
+  .aui-spinner
+  .aui-spinner.spinner {
+  top: auto;
+  left: auto;
+  transform: none;
+  margin-top: 0;
+  opacity: 1;
+}
+
+#release-page
+  #releases-add__version
+  #add-btn-container
+  .aui-spinner
+  .aui-spinner.spinner::before {
+  content: none;
+}
+
+#add-btn-container .aui-button[busy] {
+  pointer-events: none;
+}
