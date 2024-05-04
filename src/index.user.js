@@ -73,7 +73,10 @@
 
   const listenForDisabledChanges = (button) => {
     const observer = new MutationObserver(([entry]) => {
-      button.toggleAttribute("disabled", entry.target.disabled);
+      const isTargetDisabled = entry.target.disabled;
+
+      button.toggleAttribute("disabled", isTargetDisabled);
+      button.setAttribute("tabindex", isTargetDisabled ? "-1" : "0");
     });
 
     observer.observe(defaultAddBtn, {
@@ -253,6 +256,7 @@
     addBtn.className = "aui-button aui-button-split-main";
     addBtn.textContent = MESSAGES.addBtnContent;
     addBtn.setAttribute("role", "button");
+    addBtn.setAttribute("tabindex", defaultAddBtn.disabled ? "-1" : "0");
     addBtn.toggleAttribute("resolved", true);
     addBtn.toggleAttribute("disabled", defaultAddBtn.disabled);
 
@@ -260,6 +264,7 @@
       "aui-button aui-dropdown2-trigger aui-button-split-more";
     optionsBtn.textContent = MESSAGES.optionsBtnContent;
     optionsBtn.setAttribute("role", "button");
+    optionsBtn.setAttribute("tabindex", "0");
     optionsBtn.setAttribute("aria-controls", IDS.listContainer);
     optionsBtn.setAttribute("aria-expanded", "false");
     optionsBtn.toggleAttribute("resolved", true);
