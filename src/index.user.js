@@ -158,7 +158,9 @@
     return listElements;
   };
 
-  const createFixVersions = async () => {
+  const createFixVersions = async (e) => {
+    if (e.currentTarget.hasAttribute("disabled")) return;
+
     const currentProject = getCurrentProjectName();
     const targetProjects = projects.filter(
       ({ active, name }) => active && name !== currentProject
