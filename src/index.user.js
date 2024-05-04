@@ -179,7 +179,7 @@
 
     target.busy();
 
-    // defaultAddBtn.click(); //TODO uncomment
+    defaultAddBtn.click();
     const responses = await callCreateVersionEndpoint(targetProjects);
     const data = await Promise.all(responses.map((resp) => resp.value.json()));
 
