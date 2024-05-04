@@ -118,7 +118,9 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
     var observer = new MutationObserver(function (_ref2) {
       var _ref3 = _slicedToArray(_ref2, 1),
         entry = _ref3[0];
-      button.toggleAttribute("disabled", entry.target.disabled);
+      var isTargetDisabled = entry.target.disabled;
+      button.toggleAttribute("disabled", isTargetDisabled);
+      button.setAttribute("tabindex", isTargetDisabled ? "-1" : "0");
     });
     observer.observe(defaultAddBtn, {
       attributeFilter: ["disabled"]
@@ -287,11 +289,13 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
     addBtn.className = "aui-button aui-button-split-main";
     addBtn.textContent = MESSAGES.addBtnContent;
     addBtn.setAttribute("role", "button");
+    addBtn.setAttribute("tabindex", defaultAddBtn.disabled ? "-1" : "0");
     addBtn.toggleAttribute("resolved", true);
     addBtn.toggleAttribute("disabled", defaultAddBtn.disabled);
     optionsBtn.className = "aui-button aui-dropdown2-trigger aui-button-split-more";
     optionsBtn.textContent = MESSAGES.optionsBtnContent;
     optionsBtn.setAttribute("role", "button");
+    optionsBtn.setAttribute("tabindex", "0");
     optionsBtn.setAttribute("aria-controls", IDS.listContainer);
     optionsBtn.setAttribute("aria-expanded", "false");
     optionsBtn.toggleAttribute("resolved", true);
