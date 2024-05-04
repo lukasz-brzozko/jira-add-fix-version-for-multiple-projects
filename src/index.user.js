@@ -7,15 +7,14 @@
 // @match        https://jira.nd0.pl/*
 // @exclude      https://jira.nd0.pl/plugins/servlet/*
 // @icon         https://jira.nd0.pl/s/a3v501/940003/1dlckms/_/images/fav-jsw.png
+// @resource styles    https://raw.githubusercontent.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects/main/dist/styles.css
 // @updateURL    https://raw.githubusercontent.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects/main/dist/index.meta.js
 // @downloadURL  https://raw.githubusercontent.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects/main/dist/index.user.js
-// @grant        none
+// @grant        GM_getResourceText
 // ==/UserScript==
 
 (function () {
   "use strict";
-
-  const AJS = window.AJS;
 
   const SELECTORS = {
     defaultAddBtn: ".aui-button.aui-button-primary",
@@ -25,7 +24,7 @@
   const IDS = {
     form: "releases-add__version",
     listContainer: "fix-version-list",
-    addBtnContainer: "add-btn-continer",
+    addBtnContainer: "add-btn-container",
   };
 
   const MESSAGES = {
@@ -52,6 +51,14 @@
   let defaultAddBtn;
   let addVersionInput;
   let projects;
+
+  const linkStyles = async () => {
+    const myCss = GM_getResourceText("styles");
+    const styleTag = document.createElement("style");
+    styleTag.textContent = myCss;
+
+    document.body.prepend(styleTag);
+  };
 
   const getDefaultUiElements = () => {
     defaultAddBtn = form.querySelector(SELECTORS.defaultAddBtn);
@@ -123,7 +130,7 @@
   };
 
   const displayMessage = ({ type = "info", title, content }) => {
-    AJS.flag({
+    unsafeWindow.AJS.flag({
       type,
       body: `<strong>${title}</strong>
             <ul style="margin-top: 8px; padding-left: 0;">
@@ -159,7 +166,9 @@
   };
 
   const createFixVersions = async (e) => {
-    if (e.currentTarget.hasAttribute("disabled")) return;
+    const target = e.currentTarget;
+
+    if (target.hasAttribute("disabled")) return;
 
     const currentProject = getCurrentProjectName();
     const targetProjects = projects.filter(
@@ -168,10 +177,11 @@
 
     if (targetProjects.length === 0) return;
 
+    target.busy();
+
     // defaultAddBtn.click(); //TODO uncomment
     const responses = await callCreateVersionEndpoint(targetProjects);
     const data = await Promise.all(responses.map((resp) => resp.value.json()));
-    console.log({ responses, data, targetProjects });
 
     const listElements = getListItemsContent({
       data,
@@ -181,9 +191,11 @@
 
     displayMessage({
       type: "info",
-      title: "Response status of individual projects",
+      title: "Response status of other projects",
       content: listElements.join(""),
     });
+
+    target.idle();
   };
 
   const saveStateInLocalStorage = debounce((state) => {
@@ -328,6 +340,7 @@
       return handleContainerNotFound();
     }
 
+    linkStyles();
     getProjectList();
     getDefaultUiElements();
     renderUiElements();
