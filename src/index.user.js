@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Add Fix Version For Multiple Projects
 // @namespace    https://github.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects
-// @version      2024-05-03
+// @version      2024-05-04
 // @description  Allows to add one fix version for different projects simultaneously
 // @author       Łukasz Brzózko
 // @match        https://jira.nd0.pl/*
@@ -39,8 +39,9 @@
     },
   };
 
+  const JIRA_FIX_VERSION_PROJECTS = "JIRA_FIX_VERSION_PROJECTS";
   const CREATE_VERSION_ENDPOINT = "https://jira.nd0.pl/rest/api/2/version";
-  const PROJECTS = [
+  const DEFAULT_PROJECT_LIST = [
     { name: "ORB2BPOO", active: true },
     { name: "B2BM", active: true },
     { name: "ORPP", active: false },
@@ -50,10 +51,32 @@
   let form;
   let defaultAddBtn;
   let addVersionInput;
+  let projects;
 
   const getDefaultUiElements = () => {
     defaultAddBtn = form.querySelector(SELECTORS.defaultAddBtn);
     addVersionInput = form.querySelector(SELECTORS.addVersionInput);
+  };
+
+  const debounce = (callback, wait) => {
+    let timeoutId = null;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        callback(...args);
+      }, wait);
+    };
+  };
+
+  const getProjectList = () => {
+    try {
+      const projectsString = localStorage.getItem(JIRA_FIX_VERSION_PROJECTS);
+      projects = JSON.parse(projectsString) ?? [...DEFAULT_PROJECT_LIST];
+    } catch (e) {
+      projects = [...DEFAULT_PROJECT_LIST];
+    }
+
+    return projects;
   };
 
   const listenForDisabledChanges = (button) => {
@@ -137,7 +160,7 @@
 
   const createFixVersions = async () => {
     const currentProject = getCurrentProjectName();
-    const targetProjects = PROJECTS.filter(
+    const targetProjects = projects.filter(
       ({ active, name }) => active && name !== currentProject
     );
 
@@ -154,20 +177,31 @@
 
     displayMessage({
       type: "info",
-      title: "Projects' response statuses",
+      title: "Response status of individual projects",
       content: listElements.join(""),
     });
+  };
+
+  const saveStateInLocalStorage = debounce((state) => {
+    localStorage.setItem(JIRA_FIX_VERSION_PROJECTS, JSON.stringify(state));
+  }, 1000);
+
+  const handleProjectListChange = (e) => {
+    const { textContent } = e.target;
+    const project = projects.find(({ name }) => name === textContent);
+    project.active = e.target.hasAttribute("checked");
+
+    saveStateInLocalStorage(projects);
   };
 
   const renderFixVersionList = () => {
     const currentProject = getCurrentProjectName();
 
-    const container = document.createElement("div");
+    const container = document.createElement("aui-dropdown-menu");
     const section = document.createElement("aui-section");
 
     container.id = IDS.listContainer;
     container.className = "aui-dropdown2 aui-style-default aui-layer";
-    ("add-btn-continer");
     container.setAttribute(
       "data-aui-alignment-container",
       `#${IDS.addBtnContainer}`
@@ -177,7 +211,7 @@
 
     section.setAttribute("label", "Projects");
 
-    PROJECTS.forEach(({ active, name }) => {
+    projects.forEach(({ active, name }) => {
       const checkbox = document.createElement("aui-item-checkbox");
       const isCurrentProject = name === currentProject;
 
@@ -188,6 +222,8 @@
 
       section.appendChild(checkbox);
     });
+
+    container.addEventListener("change", handleProjectListChange);
 
     container.appendChild(section);
     form.appendChild(container);
@@ -276,6 +312,7 @@
       return handleContainerNotFound();
     }
 
+    getProjectList();
     getDefaultUiElements();
     renderUiElements();
   };
