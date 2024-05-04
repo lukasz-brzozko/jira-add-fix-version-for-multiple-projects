@@ -166,10 +166,12 @@
       ({ active, name }) => active && name !== currentProject
     );
 
+    if (targetProjects.length === 0) return;
+
     // defaultAddBtn.click(); //TODO uncomment
     const responses = await callCreateVersionEndpoint(targetProjects);
     const data = await Promise.all(responses.map((resp) => resp.value.json()));
-    console.log({ responses, data });
+    console.log({ responses, data, targetProjects });
 
     const listElements = getListItemsContent({
       data,
@@ -186,12 +188,24 @@
 
   const saveStateInLocalStorage = debounce((state) => {
     localStorage.setItem(JIRA_FIX_VERSION_PROJECTS, JSON.stringify(state));
-  }, 1000);
+  }, 500);
 
   const handleProjectListChange = (e) => {
     const { textContent } = e.target;
-    const project = projects.find(({ name }) => name === textContent);
-    project.active = e.target.hasAttribute("checked");
+
+    const currentProject = getCurrentProjectName();
+    const project = projects.find(
+      ({ name }) => name === textContent && name !== currentProject
+    );
+
+    if (!project) return;
+
+    const projectPrevValue = project.active;
+    const projectNewValue = e.target.hasAttribute("checked");
+
+    if (projectPrevValue === projectNewValue) return;
+
+    project.active = projectNewValue;
 
     saveStateInLocalStorage(projects);
   };
