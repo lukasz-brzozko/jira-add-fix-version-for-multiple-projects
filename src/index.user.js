@@ -167,7 +167,6 @@
 
     target.busy();
 
-    defaultAddBtn.click();
     const responses = await callCreateVersionEndpoint(targetProjects);
     const data = await Promise.all(responses.map((resp) => resp.value.json()));
 
@@ -184,6 +183,7 @@
     });
 
     target.idle();
+    defaultAddBtn.click();
   };
 
   const saveStateInLocalStorage = debounce((state) => {
