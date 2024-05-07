@@ -16,7 +16,7 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
 // ==UserScript==
 // @name         Jira Add Fix Version For Multiple Projects
 // @namespace    https://github.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects
-// @version      2024-05-04
+// @version      2024-05-07
 // @description  Allows to add one fix version for different projects simultaneously
 // @author       Łukasz Brzózko
 // @match        https://jira.nd0.pl/*
@@ -27,6 +27,7 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
 // @downloadURL  https://raw.githubusercontent.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects/main/dist/index.user.js
 // @grant        GM_getResourceText
 // ==/UserScript==
+
 (function () {
   "use strict";
 
@@ -206,16 +207,15 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
             return _context2.abrupt("return");
           case 7:
             target.busy();
-            defaultAddBtn.click();
-            _context2.next = 11;
+            _context2.next = 10;
             return callCreateVersionEndpoint(targetProjects);
-          case 11:
+          case 10:
             responses = _context2.sent;
-            _context2.next = 14;
+            _context2.next = 13;
             return Promise.all(responses.map(function (resp) {
               return resp.value.json();
             }));
-          case 14:
+          case 13:
             data = _context2.sent;
             listElements = getListItemsContent({
               data: data,
@@ -228,6 +228,7 @@ function _asyncToGenerator(fn) { return function () { var self = this, args = ar
               content: listElements.join("")
             });
             target.idle();
+            defaultAddBtn.click();
           case 18:
           case "end":
             return _context2.stop();
