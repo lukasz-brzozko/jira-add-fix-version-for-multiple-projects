@@ -19,12 +19,14 @@
   const SELECTORS = {
     defaultAddBtn: ".aui-button.aui-button-primary",
     addVersionInput: ".releases-add__name > input",
+    versionTableRow: "tr[data-version-id]",
   };
 
   const IDS = {
     form: "releases-add__version",
     listContainer: "fix-version-list",
     addBtnContainer: "add-btn-container",
+    versionsTable: "versions-table",
   };
 
   const MESSAGES = {
@@ -38,8 +40,13 @@
     },
   };
 
+  const ENDPOINTS = {
+    createVersion: "/rest/api/2/version",
+    updateVersion: (id) => `/rest/api/2/version/${id}`,
+    getProjectVersions: (project) => `/rest/api/2/project/${project}/version`,
+  };
+
   const JIRA_FIX_VERSION_PROJECTS = "JIRA_FIX_VERSION_PROJECTS";
-  const CREATE_VERSION_ENDPOINT = "https://jira.nd0.pl/rest/api/2/version";
   const DEFAULT_PROJECT_LIST = [
     { name: "ORB2BPOO", active: true },
     { name: "B2BM", active: true },
@@ -51,6 +58,8 @@
   let defaultAddBtn;
   let addVersionInput;
   let projects;
+  let versionsTable;
+  let versionTableRows = [];
 
   const linkStyles = async () => {
     const myCss = GM_getResourceText("styles");
@@ -63,6 +72,32 @@
   const getDefaultUiElements = () => {
     defaultAddBtn = form.querySelector(SELECTORS.defaultAddBtn);
     addVersionInput = form.querySelector(SELECTORS.addVersionInput);
+    versionsTable = document.getElementById(IDS.versionsTable);
+  };
+
+  const getVersionRows = () => {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      let intervalId = 0;
+
+      const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
+
+      if (rows.length > 0) return resolve(rows);
+
+      intervalId = setInterval(() => {
+        attempts++;
+        const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
+
+        console.log({ rows, attempts });
+        if (rows.length > 0) {
+          clearInterval(intervalId);
+          return resolve(rows);
+        } else if (attempts > 25) {
+          clearInterval(intervalId);
+          return reject(new Error("Not found"));
+        }
+      }, 500);
+    });
   };
 
   const debounce = (callback, wait) => {
@@ -119,7 +154,7 @@
           body: JSON.stringify({ ...body, project: name }),
         };
 
-        return fetch(CREATE_VERSION_ENDPOINT, options);
+        return fetch(ENDPOINTS.createVersion, options);
       })
     );
   };
@@ -340,6 +375,64 @@
     if (getIsProjectsPage()) return init();
   };
 
+  const filterFixVersionRows = (rows) => {
+    const filteredRows = [...rows].filter((row) => {
+      const anchor = row.querySelector(".versions-table__name a");
+
+      return anchor.textContent.match(/^FrontPortal-(\d)(\.\d{0,3})?$/);
+    });
+
+    return filteredRows;
+  };
+
+  const createArchiveButton = ({ name }) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+
+    a.textContent = "Archive for more projects";
+    a.dataset.fixVersionName = name;
+
+    li.appendChild(a);
+
+    return li;
+  };
+
+  const addArchiveButtons = () => {
+    versionTableRows.forEach((row) => {
+      const anchor = row.querySelector(".versions-table__name a");
+      const buttonPanel = row.querySelector(
+        ".dynamic-table__actions div.version-actions > ul.aui-list-truncate"
+      );
+      const archiveButton = buttonPanel.querySelector(
+        "a.project-config-operations-archive"
+      );
+
+      if (!archiveButton) return;
+      const archiveButtonContainer = archiveButton?.parentNode;
+
+      const customArchiveButton = createArchiveButton({
+        name: anchor.textContent,
+      });
+
+      archiveButtonContainer.after(customArchiveButton);
+
+      customArchiveButton.addEventListener("click", () => {
+        console.log("click");
+      });
+    });
+  };
+
+  const initArchive = async () => {
+    try {
+      const rows = await getVersionRows();
+      versionTableRows = filterFixVersionRows(rows);
+      addArchiveButtons();
+    } catch (err) {
+      console.log(err);
+      console.error("Nie znaleziono rekordów z fix version w tabeli");
+    }
+  };
+
   const init = async () => {
     try {
       await lookForAppContainer();
@@ -351,6 +444,8 @@
     getProjectList();
     getDefaultUiElements();
     renderUiElements();
+
+    await initArchive();
   };
 
   if (getIsProjectsPage()) return init();
