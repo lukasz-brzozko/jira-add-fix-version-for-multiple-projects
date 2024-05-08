@@ -178,26 +178,28 @@
       ({ active, name }) => active && name !== currentProject
     );
 
-    if (targetProjects.length === 0) return;
+    if (targetProjects.length > 0) {
+      target.busy();
 
-    target.busy();
+      const responses = await callCreateVersionEndpoint(targetProjects);
+      const data = await Promise.all(
+        responses.map((resp) => resp.value.json())
+      );
 
-    const responses = await callCreateVersionEndpoint(targetProjects);
-    const data = await Promise.all(responses.map((resp) => resp.value.json()));
+      const listElements = getListItemsContent({
+        data,
+        targetProjects,
+        responses,
+      });
 
-    const listElements = getListItemsContent({
-      data,
-      targetProjects,
-      responses,
-    });
+      displayMessage({
+        type: "info",
+        title: "Response status of other projects",
+        content: listElements.join(""),
+      });
 
-    displayMessage({
-      type: "info",
-      title: "Response status of other projects",
-      content: listElements.join(""),
-    });
-
-    target.idle();
+      target.idle();
+    }
     defaultAddBtn.click();
   };
 
