@@ -56,10 +56,10 @@
 
   const JIRA_FIX_VERSION_PROJECTS = "JIRA_FIX_VERSION_PROJECTS";
   const DEFAULT_PROJECT_LIST = [
-    { name: "ORB2BPOO", active: true },
-    { name: "B2BM", active: true },
-    { name: "ORPP", active: false },
-    { name: "CRMO", active: false },
+    { name: "ORB2BPOO", id: "13001", active: true },
+    { name: "B2BM", id: "13513", active: true },
+    { name: "ORPP", id: "12919", active: false },
+    { name: "CRMO", id: "14600", active: false },
   ];
 
   let form;
@@ -402,19 +402,115 @@
     return projectsVersions.map((projectVersions) => {
       return projectVersions.values.find(
         ({ name }) => name === targetVersionName
-      );
+      )?.id;
     });
   };
 
-  const handleArchiveBtnClick = async (e) => {
-    const targetVersionName = e.currentTarget.dataset.fixVersionName;
-    const responses = await fetchProjectsVersions();
-    const projectsVersions = await Promise.all(
-      responses.map((resp) => resp.value.json())
+  const archiveVersions = (versionIds) => {
+    return Promise.allSettled(
+      versionIds.map((id) => {
+        if (!id) return;
+
+        const options = {
+          method: "PUT",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ archived: true }),
+        };
+        const url = new URL(ENDPOINTS.updateVersion(id), BASE_URL);
+
+        return fetch(url.toString(), options);
+      })
     );
+  };
+
+  const getArchiveListItemsContent = ({
+    archiveData,
+    targetProjects,
+    archiveResponses,
+  }) => {
+    const SUCCESS_STATUS = 200;
+    const NOT_EXISTS_STATUS = 600;
+    const listElements = archiveData.map((el, index) => {
+      const project = targetProjects[index].name;
+      const { value } = archiveResponses[index];
+      const status = value
+        ? archiveResponses[index].value.status
+        : NOT_EXISTS_STATUS;
+      let message = "";
+
+      switch (status) {
+        case SUCCESS_STATUS:
+          message = "Version archived";
+          break;
+        case NOT_EXISTS_STATUS:
+          message = "Did not find version with the provided id";
+          break;
+        default:
+          message =
+            el.errorMessages[0] ?? el.errors?.name ?? MESSAGES.error.basic;
+          break;
+      }
+
+      const lozengeClassName =
+        status === SUCCESS_STATUS
+          ? "aui-lozenge-success"
+          : "aui-lozenge-removed";
+      const messageColor =
+        status === SUCCESS_STATUS
+          ? "--aui-lozenge-success-subtle-text-color"
+          : "--aui-badge-removed-text-color";
+
+      return `
+      <li>
+        <span>${project}: </span>
+        <span class="aui-lozenge aui-lozenge-subtle ${lozengeClassName}">${status}</span>
+        <span style="font-size: 10px; line-height: 1; color: var(${messageColor})"> - ${message}</span>
+      </li>`;
+    });
+
+    return listElements;
+  };
+
+  const handleArchiveBtnClick = async (e) => {
+    const targetProjects = getTargetProjects();
+    const targetVersionName = e.currentTarget.dataset.fixVersionName;
+
+    // Fetch project versions
+    const projectsVersionsResponses = await fetchProjectsVersions(
+      targetProjects
+    );
+    // TODO obłsużyć błędny status podczas pobierania wersji projektu
+    // Get response data
+    const projectsVersions = await Promise.all(
+      projectsVersionsResponses.map((resp) => resp.value.json())
+    );
+    // Extract versions ids from the response data
     const versionIds = getVersionIds({ projectsVersions, targetVersionName });
 
-    console.log({ versionIds });
+    // Call an endpoint to archive project version
+    const archiveResponses = await archiveVersions(versionIds);
+    // Get response data
+    const archiveData = await Promise.all(
+      archiveResponses.map((resp) => {
+        if (!resp.value) return;
+        return resp.value.json();
+      })
+    );
+
+    const listElements = getArchiveListItemsContent({
+      archiveData,
+      targetProjects,
+      archiveResponses,
+    });
+
+    displayMessage({
+      type: "info",
+      title: "Response status of other projects (archiving)",
+      content: listElements.join(""),
+    });
   };
 
   const createArchiveButton = ({ name }) => {
@@ -431,9 +527,7 @@
     return li;
   };
 
-  const fetchProjectsVersions = () => {
-    const targetProjects = getTargetProjects();
-
+  const fetchProjectsVersions = (targetProjects) => {
     return Promise.allSettled(
       targetProjects.map(({ name }) => {
         const url = new URL(ENDPOINTS.getProjectVersions(name), BASE_URL);
