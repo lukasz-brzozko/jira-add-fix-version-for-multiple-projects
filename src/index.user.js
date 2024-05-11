@@ -16,10 +16,16 @@
 (function () {
   "use strict";
 
+  const GET_PROJECT_VERSIONS_MAX_RESULTS = 50;
+
   const SELECTORS = {
     defaultAddBtn: ".aui-button.aui-button-primary",
     addVersionInput: ".releases-add__name > input",
     versionTableRow: "tr[data-version-id]",
+    versionTableLink: ".versions-table__name a",
+    versionTableRowPanel:
+      ".dynamic-table__actions div.version-actions > ul.aui-list-truncate",
+    versionTableRowArchiveBtn: "a.project-config-operations-archive",
   };
 
   const IDS = {
@@ -30,6 +36,7 @@
   };
 
   const MESSAGES = {
+    customArchiveButton: "Archive for more projects",
     optionsBtnContent: "Split More",
     addBtnContent: "Add for more projects",
     containerFound: `Znaleziono formularz ${IDS.form}`,
@@ -40,6 +47,7 @@
     },
   };
 
+  const BASE_URL = "https://jira.nd0.pl";
   const ENDPOINTS = {
     createVersion: "/rest/api/2/version",
     updateVersion: (id) => `/rest/api/2/version/${id}`,
@@ -88,7 +96,6 @@
         attempts++;
         const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
 
-        console.log({ rows, attempts });
         if (rows.length > 0) {
           clearInterval(intervalId);
           return resolve(rows);
@@ -203,15 +210,21 @@
     return listElements;
   };
 
+  const getTargetProjects = () => {
+    const currentProject = getCurrentProjectName();
+    const targetProjects = projects.filter(
+      ({ active, name }) => active && name !== currentProject
+    );
+
+    return targetProjects;
+  };
+
   const createFixVersions = async (e) => {
     const target = e.currentTarget;
 
     if (target.hasAttribute("disabled")) return;
 
-    const currentProject = getCurrentProjectName();
-    const targetProjects = projects.filter(
-      ({ active, name }) => active && name !== currentProject
-    );
+    const targetProjects = getTargetProjects();
 
     if (targetProjects.length > 0) {
       target.busy();
@@ -377,7 +390,7 @@
 
   const filterFixVersionRows = (rows) => {
     const filteredRows = [...rows].filter((row) => {
-      const anchor = row.querySelector(".versions-table__name a");
+      const anchor = row.querySelector(SELECTORS.versionTableLink);
 
       return anchor.textContent.match(/^FrontPortal-(\d)(\.\d{0,3})?$/);
     });
@@ -385,40 +398,69 @@
     return filteredRows;
   };
 
+  const getVersionIds = ({ projectsVersions, targetVersionName }) => {
+    return projectsVersions.map((projectVersions) => {
+      return projectVersions.values.find(
+        ({ name }) => name === targetVersionName
+      );
+    });
+  };
+
+  const handleArchiveBtnClick = async (e) => {
+    const targetVersionName = e.currentTarget.dataset.fixVersionName;
+    const responses = await fetchProjectsVersions();
+    const projectsVersions = await Promise.all(
+      responses.map((resp) => resp.value.json())
+    );
+    const versionIds = getVersionIds({ projectsVersions, targetVersionName });
+
+    console.log({ versionIds });
+  };
+
   const createArchiveButton = ({ name }) => {
     const li = document.createElement("li");
     const a = document.createElement("a");
 
-    a.textContent = "Archive for more projects";
+    a.textContent = MESSAGES.customArchiveButton;
     a.dataset.fixVersionName = name;
 
     li.appendChild(a);
 
+    a.addEventListener("click", handleArchiveBtnClick);
+
     return li;
+  };
+
+  const fetchProjectsVersions = () => {
+    const targetProjects = getTargetProjects();
+
+    return Promise.allSettled(
+      targetProjects.map(({ name }) => {
+        const url = new URL(ENDPOINTS.getProjectVersions(name), BASE_URL);
+        url.searchParams.set("orderBy", "-sequence");
+        url.searchParams.set("maxResults", GET_PROJECT_VERSIONS_MAX_RESULTS);
+
+        return fetch(url.toString());
+      })
+    );
   };
 
   const addArchiveButtons = () => {
     versionTableRows.forEach((row) => {
-      const anchor = row.querySelector(".versions-table__name a");
-      const buttonPanel = row.querySelector(
-        ".dynamic-table__actions div.version-actions > ul.aui-list-truncate"
-      );
+      const anchor = row.querySelector(SELECTORS.versionTableLink);
+      const buttonPanel = row.querySelector(SELECTORS.versionTableRowPanel);
       const archiveButton = buttonPanel.querySelector(
-        "a.project-config-operations-archive"
+        SELECTORS.versionTableRowArchiveBtn
       );
 
       if (!archiveButton) return;
       const archiveButtonContainer = archiveButton?.parentNode;
-
+      const fixVersionName = anchor.textContent;
       const customArchiveButton = createArchiveButton({
-        name: anchor.textContent,
+        name: fixVersionName,
       });
 
       archiveButtonContainer.after(customArchiveButton);
-
-      customArchiveButton.addEventListener("click", () => {
-        console.log("click");
-      });
     });
   };
 
