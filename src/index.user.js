@@ -476,7 +476,7 @@
     return listElements;
   };
 
-  const handleArchiveBtnClick = async (e) => {
+  const handleArchiveBtnClick = async ({ e, archiveButton }) => {
     const targetProjects = getTargetProjects();
     const targetVersionName = e.currentTarget.dataset.fixVersionName;
 
@@ -484,7 +484,6 @@
     const projectsVersionsResponses = await fetchProjectsVersions(
       targetProjects
     );
-    // TODO obłsużyć błędny status podczas pobierania wersji projektu
     // Get response data
     const projectsVersions = await Promise.all(
       projectsVersionsResponses.map((resp) => resp.value.json())
@@ -514,9 +513,11 @@
       title: `${targetVersionName} - response status of other projects (archiving)`,
       content: listElements.join(""),
     });
+
+    archiveButton.click();
   };
 
-  const createArchiveButton = ({ name }) => {
+  const createArchiveButton = ({ name, archiveButton }) => {
     const li = document.createElement("li");
     const a = document.createElement("a");
 
@@ -526,7 +527,9 @@
 
     li.appendChild(a);
 
-    a.addEventListener("click", handleArchiveBtnClick);
+    a.addEventListener("click", (e) =>
+      handleArchiveBtnClick({ e, archiveButton })
+    );
 
     return li;
   };
@@ -547,10 +550,10 @@
     versionTableRows.forEach((row) => {
       const anchor = row.querySelector(SELECTORS.versionTableLink);
       const buttonPanel = row?.querySelector(SELECTORS.versionTableRowPanel);
-      const archiveButton = buttonPanel.querySelector(
+      const archiveButton = buttonPanel?.querySelector(
         SELECTORS.versionTableRowArchiveBtn
       );
-      const archiveForMultipleProjectBtn = buttonPanel.querySelector(
+      const archiveForMultipleProjectBtn = buttonPanel?.querySelector(
         SELECTORS.archiveForMultipleProjectBtn
       );
 
@@ -559,6 +562,7 @@
       const fixVersionName = anchor.textContent;
       const customArchiveButton = createArchiveButton({
         name: fixVersionName,
+        archiveButton,
       });
 
       archiveButtonContainer.after(customArchiveButton);
