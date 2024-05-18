@@ -69,6 +69,7 @@
   let addVersionInput;
   let projects;
   let versionsTable;
+  let versionsTableobserver;
   let versionTableRows = [];
 
   const linkStyles = async () => {
@@ -82,7 +83,7 @@
   const getDefaultUiElements = () => {
     defaultAddBtn = form.querySelector(SELECTORS.defaultAddBtn);
     addVersionInput = form.querySelector(SELECTORS.addVersionInput);
-    versionsTable = document.getElementById(IDS.versionsTable);
+    udpateVersionsTableEl();
   };
 
   const getVersionRows = () => {
@@ -90,12 +91,14 @@
       let attempts = 0;
       let intervalId = 0;
 
+      udpateVersionsTableEl();
       const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
 
       if (rows.length > 0) return resolve(rows);
 
       intervalId = setInterval(() => {
         attempts++;
+        udpateVersionsTableEl();
         const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
 
         if (rows.length > 0) {
@@ -394,7 +397,7 @@
     const filteredRows = [...rows].filter((row) => {
       const anchor = row.querySelector(SELECTORS.versionTableLink);
 
-      return anchor.textContent.match(/^FrontPortal-(\d)(\.\d{0,3})?$/);
+      return anchor?.textContent.match(/^FrontPortal-(\d)(\.\d{0,3})?$/);
     });
 
     return filteredRows;
@@ -575,18 +578,25 @@
     addArchiveButtons();
   };
 
-  const handleVersionTableBodyUpdate = async () => {
-    await addButtons();
+  const udpateVersionsTableEl = () => {
+    versionsTable = document.getElementById(IDS.versionsTable);
   };
+
+  const handleVersionTableBodyUpdate = debounce(async () => {
+    await addButtons();
+
+    udpateVersionsTableEl();
+    versionsTableobserver.disconnect();
+    listenForTableChanges();
+  }, 250);
 
   const listenForTableChanges = () => {
     const versionsTableBody = versionsTable.querySelector(
       SELECTORS.versionTableBody
     );
 
-    const observer = new MutationObserver(handleVersionTableBodyUpdate);
-
-    observer.observe(versionsTableBody, { childList: true });
+    versionsTableobserver = new MutationObserver(handleVersionTableBodyUpdate);
+    versionsTableobserver.observe(versionsTableBody, { childList: true });
   };
 
   const initArchive = async () => {
