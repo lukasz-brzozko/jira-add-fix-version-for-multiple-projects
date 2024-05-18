@@ -573,7 +573,6 @@
 
   const handleVersionTableBodyUpdate = async () => {
     await addButtons();
-    console.log({ versionTableRows });
   };
 
   const listenForTableChanges = () => {
