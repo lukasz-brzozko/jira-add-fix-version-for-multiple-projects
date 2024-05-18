@@ -26,6 +26,8 @@
     versionTableRowPanel:
       ".dynamic-table__actions div.version-actions > ul.aui-list-truncate",
     versionTableRowArchiveBtn: "a.project-config-operations-archive",
+    versionTableBody: "tbody.items",
+    archiveForMultipleProjectBtn: ".archive-for-multiple-projects-btn",
   };
 
   const IDS = {
@@ -487,6 +489,7 @@
     const projectsVersions = await Promise.all(
       projectsVersionsResponses.map((resp) => resp.value.json())
     );
+
     // Extract versions ids from the response data
     const versionIds = getVersionIds({ projectsVersions, targetVersionName });
 
@@ -508,7 +511,7 @@
 
     displayMessage({
       type: "info",
-      title: "Response status of other projects (archiving)",
+      title: `${targetVersionName} - response status of other projects (archiving)`,
       content: listElements.join(""),
     });
   };
@@ -519,6 +522,7 @@
 
     a.textContent = MESSAGES.customArchiveButton;
     a.dataset.fixVersionName = name;
+    a.className = "archive-for-multiple-projects-btn";
 
     li.appendChild(a);
 
@@ -542,12 +546,15 @@
   const addArchiveButtons = () => {
     versionTableRows.forEach((row) => {
       const anchor = row.querySelector(SELECTORS.versionTableLink);
-      const buttonPanel = row.querySelector(SELECTORS.versionTableRowPanel);
+      const buttonPanel = row?.querySelector(SELECTORS.versionTableRowPanel);
       const archiveButton = buttonPanel.querySelector(
         SELECTORS.versionTableRowArchiveBtn
       );
+      const archiveForMultipleProjectBtn = buttonPanel.querySelector(
+        SELECTORS.archiveForMultipleProjectBtn
+      );
 
-      if (!archiveButton) return;
+      if (!archiveButton || archiveForMultipleProjectBtn) return;
       const archiveButtonContainer = archiveButton?.parentNode;
       const fixVersionName = anchor.textContent;
       const customArchiveButton = createArchiveButton({
@@ -558,11 +565,31 @@
     });
   };
 
+  const addButtons = async () => {
+    const rows = await getVersionRows();
+    versionTableRows = filterFixVersionRows(rows);
+    addArchiveButtons();
+  };
+
+  const handleVersionTableBodyUpdate = async () => {
+    await addButtons();
+    console.log({ versionTableRows });
+  };
+
+  const listenForTableChanges = () => {
+    const versionsTableBody = versionsTable.querySelector(
+      SELECTORS.versionTableBody
+    );
+
+    const observer = new MutationObserver(handleVersionTableBodyUpdate);
+
+    observer.observe(versionsTableBody, { childList: true });
+  };
+
   const initArchive = async () => {
     try {
-      const rows = await getVersionRows();
-      versionTableRows = filterFixVersionRows(rows);
-      addArchiveButtons();
+      await addButtons();
+      listenForTableChanges();
     } catch (err) {
       console.log(err);
       console.error("Nie znaleziono rekordów z fix version w tabeli");
