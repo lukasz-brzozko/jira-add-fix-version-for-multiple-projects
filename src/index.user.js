@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Add Fix Version For Multiple Projects
 // @namespace    https://github.com/lukasz-brzozko/jira-add-fix-version-for-multiple-projects
-// @version      2024-05-08
+// @version      2024-05-18
 // @description  Allows to add one fix version for different projects simultaneously
 // @author       Łukasz Brzózko
 // @match        https://jira.nd0.pl/*
@@ -16,18 +16,29 @@
 (function () {
   "use strict";
 
+  const GET_PROJECT_VERSIONS_MAX_RESULTS = 50;
+
   const SELECTORS = {
     defaultAddBtn: ".aui-button.aui-button-primary",
     addVersionInput: ".releases-add__name > input",
+    versionTableRow: "tr[data-version-id]",
+    versionTableLink: ".versions-table__name a",
+    versionTableRowPanel:
+      ".dynamic-table__actions div.version-actions > ul.aui-list-truncate",
+    versionTableRowArchiveBtn: "a.project-config-operations-archive",
+    versionTableBody: "tbody.items",
+    archiveForMultipleProjectBtn: ".archive-for-multiple-projects-btn",
   };
 
   const IDS = {
     form: "releases-add__version",
     listContainer: "fix-version-list",
     addBtnContainer: "add-btn-container",
+    versionsTable: "versions-table",
   };
 
   const MESSAGES = {
+    customArchiveButton: "Archive for more projects",
     optionsBtnContent: "Split More",
     addBtnContent: "Add for more projects",
     containerFound: `Znaleziono formularz ${IDS.form}`,
@@ -38,19 +49,28 @@
     },
   };
 
+  const BASE_URL = "https://jira.nd0.pl";
+  const ENDPOINTS = {
+    createVersion: "/rest/api/2/version",
+    updateVersion: (id) => `/rest/api/2/version/${id}`,
+    getProjectVersions: (project) => `/rest/api/2/project/${project}/version`,
+  };
+
   const JIRA_FIX_VERSION_PROJECTS = "JIRA_FIX_VERSION_PROJECTS";
-  const CREATE_VERSION_ENDPOINT = "https://jira.nd0.pl/rest/api/2/version";
   const DEFAULT_PROJECT_LIST = [
-    { name: "ORB2BPOO", active: true },
-    { name: "B2BM", active: true },
-    { name: "ORPP", active: false },
-    { name: "CRMO", active: false },
+    { name: "ORB2BPOO", id: "13001", active: true },
+    { name: "B2BM", id: "13513", active: true },
+    { name: "ORPP", id: "12919", active: false },
+    { name: "CRMO", id: "14600", active: false },
   ];
 
   let form;
   let defaultAddBtn;
   let addVersionInput;
   let projects;
+  let versionsTable;
+  let versionsTableobserver;
+  let versionTableRows = [];
 
   const linkStyles = async () => {
     const myCss = GM_getResourceText("styles");
@@ -63,6 +83,33 @@
   const getDefaultUiElements = () => {
     defaultAddBtn = form.querySelector(SELECTORS.defaultAddBtn);
     addVersionInput = form.querySelector(SELECTORS.addVersionInput);
+    udpateVersionsTableEl();
+  };
+
+  const getVersionRows = () => {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      let intervalId = 0;
+
+      udpateVersionsTableEl();
+      const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
+
+      if (rows.length > 0) return resolve(rows);
+
+      intervalId = setInterval(() => {
+        attempts++;
+        udpateVersionsTableEl();
+        const rows = versionsTable.querySelectorAll(SELECTORS.versionTableRow);
+
+        if (rows.length > 0) {
+          clearInterval(intervalId);
+          return resolve(rows);
+        } else if (attempts > 25) {
+          clearInterval(intervalId);
+          return reject(new Error("Not found"));
+        }
+      }, 500);
+    });
   };
 
   const debounce = (callback, wait) => {
@@ -119,7 +166,7 @@
           body: JSON.stringify({ ...body, project: name }),
         };
 
-        return fetch(CREATE_VERSION_ENDPOINT, options);
+        return fetch(ENDPOINTS.createVersion, options);
       })
     );
   };
@@ -168,15 +215,21 @@
     return listElements;
   };
 
+  const getTargetProjects = () => {
+    const currentProject = getCurrentProjectName();
+    const targetProjects = projects.filter(
+      ({ active, name }) => active && name !== currentProject
+    );
+
+    return targetProjects;
+  };
+
   const createFixVersions = async (e) => {
     const target = e.currentTarget;
 
     if (target.hasAttribute("disabled")) return;
 
-    const currentProject = getCurrentProjectName();
-    const targetProjects = projects.filter(
-      ({ active, name }) => active && name !== currentProject
-    );
+    const targetProjects = getTargetProjects();
 
     if (targetProjects.length > 0) {
       target.busy();
@@ -340,6 +393,222 @@
     if (getIsProjectsPage()) return init();
   };
 
+  const filterFixVersionRows = (rows) => {
+    const filteredRows = [...rows].filter((row) => {
+      const anchor = row.querySelector(SELECTORS.versionTableLink);
+
+      return anchor?.textContent.match(/^FrontPortal-(\d)(\.\d{0,3})?$/);
+    });
+
+    return filteredRows;
+  };
+
+  const getVersionIds = ({ projectsVersions, targetVersionName }) => {
+    return projectsVersions.map((projectVersions) => {
+      return projectVersions.values.find(
+        ({ name }) => name === targetVersionName
+      )?.id;
+    });
+  };
+
+  const archiveVersions = (versionIds) => {
+    return Promise.allSettled(
+      versionIds.map((id) => {
+        if (!id) return;
+
+        const options = {
+          method: "PUT",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ archived: true }),
+        };
+        const url = new URL(ENDPOINTS.updateVersion(id), BASE_URL);
+
+        return fetch(url.toString(), options);
+      })
+    );
+  };
+
+  const getArchiveListItemsContent = ({
+    archiveData,
+    targetProjects,
+    archiveResponses,
+  }) => {
+    const SUCCESS_STATUS = 200;
+    const NOT_EXISTS_STATUS = 600;
+    const listElements = archiveData.map((el, index) => {
+      const project = targetProjects[index].name;
+      const { value } = archiveResponses[index];
+      const status = value
+        ? archiveResponses[index].value.status
+        : NOT_EXISTS_STATUS;
+      let message = "";
+
+      switch (status) {
+        case SUCCESS_STATUS:
+          message = "Version archived";
+          break;
+        case NOT_EXISTS_STATUS:
+          message = "Did not find version with the provided id";
+          break;
+        default:
+          message =
+            el.errorMessages[0] ?? el.errors?.name ?? MESSAGES.error.basic;
+          break;
+      }
+
+      const lozengeClassName =
+        status === SUCCESS_STATUS
+          ? "aui-lozenge-success"
+          : "aui-lozenge-removed";
+      const messageColor =
+        status === SUCCESS_STATUS
+          ? "--aui-lozenge-success-subtle-text-color"
+          : "--aui-badge-removed-text-color";
+
+      return `
+      <li>
+        <span>${project}: </span>
+        <span class="aui-lozenge aui-lozenge-subtle ${lozengeClassName}">${status}</span>
+        <span style="font-size: 10px; line-height: 1; color: var(${messageColor})"> - ${message}</span>
+      </li>`;
+    });
+
+    return listElements;
+  };
+
+  const handleArchiveBtnClick = async ({ e, archiveButton }) => {
+    const targetProjects = getTargetProjects();
+    const targetVersionName = e.currentTarget.dataset.fixVersionName;
+
+    // Fetch project versions
+    const projectsVersionsResponses = await fetchProjectsVersions(
+      targetProjects
+    );
+    // Get response data
+    const projectsVersions = await Promise.all(
+      projectsVersionsResponses.map((resp) => resp.value.json())
+    );
+
+    // Extract versions ids from the response data
+    const versionIds = getVersionIds({ projectsVersions, targetVersionName });
+
+    // Call an endpoint to archive project version
+    const archiveResponses = await archiveVersions(versionIds);
+    // Get response data
+    const archiveData = await Promise.all(
+      archiveResponses.map((resp) => {
+        if (!resp.value) return;
+        return resp.value.json();
+      })
+    );
+
+    const listElements = getArchiveListItemsContent({
+      archiveData,
+      targetProjects,
+      archiveResponses,
+    });
+
+    displayMessage({
+      type: "info",
+      title: `${targetVersionName} - response status of other projects (archiving)`,
+      content: listElements.join(""),
+    });
+
+    archiveButton.click();
+  };
+
+  const createArchiveButton = ({ name, archiveButton }) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+
+    a.textContent = MESSAGES.customArchiveButton;
+    a.dataset.fixVersionName = name;
+    a.className = "archive-for-multiple-projects-btn";
+
+    li.appendChild(a);
+
+    a.addEventListener("click", (e) =>
+      handleArchiveBtnClick({ e, archiveButton })
+    );
+
+    return li;
+  };
+
+  const fetchProjectsVersions = (targetProjects) => {
+    return Promise.allSettled(
+      targetProjects.map(({ name }) => {
+        const url = new URL(ENDPOINTS.getProjectVersions(name), BASE_URL);
+        url.searchParams.set("orderBy", "-sequence");
+        url.searchParams.set("maxResults", GET_PROJECT_VERSIONS_MAX_RESULTS);
+
+        return fetch(url.toString());
+      })
+    );
+  };
+
+  const addArchiveButtons = () => {
+    versionTableRows.forEach((row) => {
+      const anchor = row.querySelector(SELECTORS.versionTableLink);
+      const buttonPanel = row?.querySelector(SELECTORS.versionTableRowPanel);
+      const archiveButton = buttonPanel?.querySelector(
+        SELECTORS.versionTableRowArchiveBtn
+      );
+      const archiveForMultipleProjectBtn = buttonPanel?.querySelector(
+        SELECTORS.archiveForMultipleProjectBtn
+      );
+
+      if (!archiveButton || archiveForMultipleProjectBtn) return;
+      const archiveButtonContainer = archiveButton?.parentNode;
+      const fixVersionName = anchor.textContent;
+      const customArchiveButton = createArchiveButton({
+        name: fixVersionName,
+        archiveButton,
+      });
+
+      archiveButtonContainer.after(customArchiveButton);
+    });
+  };
+
+  const addButtons = async () => {
+    const rows = await getVersionRows();
+    versionTableRows = filterFixVersionRows(rows);
+    addArchiveButtons();
+  };
+
+  const udpateVersionsTableEl = () => {
+    versionsTable = document.getElementById(IDS.versionsTable);
+  };
+
+  const handleVersionTableBodyUpdate = debounce(async () => {
+    await addButtons();
+
+    udpateVersionsTableEl();
+    versionsTableobserver.disconnect();
+    listenForTableChanges();
+  }, 250);
+
+  const listenForTableChanges = () => {
+    const versionsTableBody = versionsTable.querySelector(
+      SELECTORS.versionTableBody
+    );
+
+    versionsTableobserver = new MutationObserver(handleVersionTableBodyUpdate);
+    versionsTableobserver.observe(versionsTableBody, { childList: true });
+  };
+
+  const initArchive = async () => {
+    try {
+      await addButtons();
+      listenForTableChanges();
+    } catch (err) {
+      console.log(err);
+      console.error("Nie znaleziono rekordów z fix version w tabeli");
+    }
+  };
+
   const init = async () => {
     try {
       await lookForAppContainer();
@@ -351,6 +620,8 @@
     getProjectList();
     getDefaultUiElements();
     renderUiElements();
+
+    await initArchive();
   };
 
   if (getIsProjectsPage()) return init();
